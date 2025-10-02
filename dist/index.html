@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpotiFee - Free Music</title>
+  <link rel="icon" href="/SpotiFeev2/spotifeev2_icon.svg" />
+  <script type="module" crossorigin src="/SpotiFeev2/assets/index-e80a80b4.js"></script>
+  <link rel="stylesheet" href="/SpotiFeev2/assets/index-bcb4c1fc.css">
+</head>
+
+<body>
+
+  <canvas class="music-canvas" id="musicCanvas" aria-hidden="true"></canvas>
+
+
+  <div class="music-bg" aria-hidden="true">
+    <span class="note" style="--tx:60vw; --ty:35vh; --d1:11s; --d2:9s;  --delay:-1s; left:5vw;  top:10vh;">♫</span>
+    <span class="note" style="--tx:70vw; --ty:50vh; --d1:14s; --d2:13s; --delay:-3s; left:20vw; top:5vh;">♪</span>
+    <span class="note" style="--tx:50vw; --ty:60vh; --d1:12s; --d2:10s; --delay:-2s; left:60vw; top:15vh;">♬</span>
+    <span class="note" style="--tx:65vw; --ty:40vh; --d1:9s;  --d2:8s;  --delay:-4s; left:35vw; top:30vh;">♩</span>
+    <span class="note" style="--tx:55vw; --ty:55vh; --d1:16s; --d2:12s; --delay:-6s; left:10vw; top:60vh;">♫</span>
+    <span class="note" style="--tx:80vw; --ty:45vh; --d1:18s; --d2:15s; --delay:-7s; left:75vw; top:50vh;">♪</span>
+    <span class="note" style="--tx:45vw; --ty:35vh; --d1:10s; --d2:9s;  --delay:-5s; left:40vw; top:70vh;">♬</span>
+    <span class="note" style="--tx:35vw; --ty:65vh; --d1:13s; --d2:11s; --delay:-8s; left:55vw; top:20vh;">♩</span>
+    <span class="note" style="--tx:75vw; --ty:30vh; --d1:17s; --d2:14s; --delay:-9s; left:15vw; top:35vh;">♫</span>
+    <span class="note" style="--tx:60vw; --ty:70vh; --d1:12s; --d2:18s; --delay:-11s;left:65vw; top:5vh;">♪</span>
+    <span class="note" style="--tx:40vw; --ty:50vh; --d1:15s; --d2:10s; --delay:-12s;left:25vw; top:75vh;">♬</span>
+    <span class="note" style="--tx:85vw; --ty:55vh; --d1:20s; --d2:16s; --delay:-13s;left:5vw;  top:45vh;">♩</span>
+  </div>
+
+
+
+  <script>
+
+    (function () {
+      const canvas = document.getElementById('musicCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+
+      // --------- TUNEABLES ---------
+      const COUNT = 50;             // cantidad de notas
+      const CHARS = ['♪', '♫', '♬', '♩'];
+      const SIZE_MIN = 16;             // px
+      const SIZE_MAX = 27;             // px
+      const BASE_ALPHA = 0.22;           // opacidad base
+      const SHADOW_ALPHA = 0.15;           // brillo suave
+      const DRAG = 0.85;           // 0..1 (fricción por frame) — más bajo = más resbalosas
+      const BOUNCE = 0.85;           // elasticidad del rebote contra bordes
+      const MOUSE_FORCE = 9000;           // fuerza radial de empuje del mouse
+      const MOUSE_R = 180;            // radio de influencia del mouse (px)
+      const COLLISION_R = 0.85;           // 1 = tocan borde con borde; <1 = se “apartan” antes
+      const GRID_SIZE = 120;            // tamaño de celda para colisiones (rendimiento)
+
+      // --------- STATE ---------
+      let W = 0, H = 0, dpr = Math.max(1, window.devicePixelRatio || 1);
+      const notes = [];
+      let mouse = { x: -1e6, y: -1e6, active: false };
+
+      function resize() {
+        W = canvas.clientWidth = window.innerWidth;
+        H = canvas.clientHeight = window.innerHeight;
+        canvas.width = Math.floor(W * dpr);
+        canvas.height = Math.floor(H * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      // Crear notas
+      function rand(a, b) { return a + Math.random() * (b - a); }
+      for (let i = 0; i < COUNT; i++) {
+        const size = rand(SIZE_MIN, SIZE_MAX);
+        notes.push({
+          x: rand(size, W - size),
+          y: rand(size, H - size),
+          vx: rand(-40, 40),
+          vy: rand(-40, 40),
+          r: size * 0.55,              // radio aproximado para colisión
+          size,
+          char: CHARS[(Math.random() * CHARS.length) | 0],
+          mass: size * 0.02 + 0.5,     // masa aprox: más grandes = más pesadas
+          alpha: rand(BASE_ALPHA * 0.8, BASE_ALPHA * 1.2)
+        });
+      }
+
+      // Input mouse / touch
+      function setMouse(x, y, active = true) {
+        mouse.x = x; mouse.y = y; mouse.active = active;
+      }
+      window.addEventListener('mousemove', e => setMouse(e.clientX, e.clientY), { passive: true });
+      window.addEventListener('mouseleave', () => setMouse(-1e6, -1e6, false), { passive: true });
+      window.addEventListener('touchstart', e => {
+        const t = e.touches[0]; if (t) setMouse(t.clientX, t.clientY, true);
+      }, { passive: true });
+      window.addEventListener('touchmove', e => {
+        const t = e.touches[0]; if (t) setMouse(t.clientX, t.clientY, true);
+      }, { passive: true });
+      window.addEventListener('touchend', () => setMouse(-1e6, -1e6, false), { passive: true });
+
+      // Espacial: hash grid
+      function buildGrid() {
+        const grid = new Map();
+        for (let i = 0; i < notes.length; i++) {
+          const n = notes[i];
+          const gx = (n.x / GRID_SIZE) | 0;
+          const gy = (n.y / GRID_SIZE) | 0;
+          const key = gx + ',' + gy;
+          (grid.get(key) || (grid.set(key, []), grid.get(key))).push(i);
+        }
+        return grid;
+      }
+
+      function neighbors(grid, x, y) {
+        const res = [];
+        const gx = (x / GRID_SIZE) | 0;
+        const gy = (y / GRID_SIZE) | 0;
+        for (let ix = -1; ix <= 1; ix++) {
+          for (let iy = -1; iy <= 1; iy++) {
+            const key = (gx + ix) + ',' + (gy + iy);
+            const cell = grid.get(key);
+            if (cell) res.push(cell);
+          }
+        }
+        return res;
+      }
+
+      // Loop
+      let lastT = performance.now();
+      function frame(t) {
+        const dt = Math.min(0.033, (t - lastT) / 1000); // cap ~30fps fís.
+        lastT = t;
+
+        // Física: fuerzas + integración
+        const grid = buildGrid();
+
+        for (let i = 0; i < notes.length; i++) {
+          const n = notes[i];
+
+          // Fuerza del mouse (repulsión radial suave)
+          if (mouse.active) {
+            const dx = n.x - mouse.x;
+            const dy = n.y - mouse.y;
+            const d2 = dx * dx + dy * dy;
+            const r2 = MOUSE_R * MOUSE_R;
+            if (d2 < r2 && d2 > 1) {
+              const d = Math.sqrt(d2);
+              const f = (1 - d / MOUSE_R) * (MOUSE_FORCE / (n.mass)); // más cerca => más empuje
+              const nx = dx / d, ny = dy / d;
+              n.vx += nx * f * dt;
+              n.vy += ny * f * dt;
+            }
+          }
+
+          // Colisiones suaves con vecinos
+          const neighCells = neighbors(grid, n.x, n.y);
+          for (const arr of neighCells) {
+            for (let idx of arr) {
+              if (idx <= i) continue; // evitar doble conteo
+              const m = notes[idx];
+              const dx = m.x - n.x;
+              const dy = m.y - n.y;
+              const dist2 = dx * dx + dy * dy;
+              const minDist = (n.r + m.r) * COLLISION_R;
+              if (dist2 > 0 && dist2 < minDist * minDist) {
+                const dist = Math.sqrt(dist2) || 0.001;
+                const overlap = (minDist - dist);
+                const nx = dx / dist, ny = dy / dist;
+
+                // Separación proporcional a masas (como “bolas”)
+                const invMassSum = 1 / n.mass + 1 / m.mass;
+                const pushN = overlap * (1 / n.mass) / invMassSum;
+                const pushM = overlap * (1 / m.mass) / invMassSum;
+
+                n.x -= nx * pushN;
+                n.y -= ny * pushN;
+                m.x += nx * pushM;
+                m.y += ny * pushM;
+
+                // Pequeño intercambio de velocidad (impulso)
+                const relVx = m.vx - n.vx;
+                const relVy = m.vy - n.vy;
+                const relAlongNormal = relVx * nx + relVy * ny;
+                if (relAlongNormal < 0) {
+                  const e = 0.9; // casi elástico
+                  const j = -(1 + e) * relAlongNormal / invMassSum;
+                  const jx = j * nx, jy = j * ny;
+                  n.vx -= jx / n.mass; n.vy -= jy / n.mass;
+                  m.vx += jx / m.mass; m.vy += jy / m.mass;
+                }
+              }
+            }
+          }
+
+          // Fricción/rozamiento
+          n.vx *= Math.pow(DRAG, dt * 60);
+          n.vy *= Math.pow(DRAG, dt * 60);
+
+          // Integración
+          n.x += n.vx * dt;
+          n.y += n.vy * dt;
+
+          // Bordes con rebote
+          if (n.x < n.r) { n.x = n.r; n.vx = Math.abs(n.vx) * BOUNCE; }
+          if (n.x > W - n.r) { n.x = W - n.r; n.vx = -Math.abs(n.vx) * BOUNCE; }
+          if (n.y < n.r) { n.y = n.r; n.vy = Math.abs(n.vy) * BOUNCE; }
+          if (n.y > H - n.r) { n.y = H - n.r; n.vy = -Math.abs(n.vy) * BOUNCE; }
+        }
+
+        // Render
+        ctx.clearRect(0, 0, W, H);
+        for (const n of notes) {
+          ctx.save();
+          ctx.globalAlpha = n.alpha;
+          ctx.font = `${n.size}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          // brillo suave
+          ctx.shadowColor = `rgba(255,255,255,${SHADOW_ALPHA})`;
+          ctx.shadowBlur = 6;
+
+          ctx.fillStyle = '#fff';
+          ctx.fillText(n.char, n.x, n.y);
+          ctx.restore();
+        }
+
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+
+
+<!-- Footer centrado -->
+<footer class="w-full flex flex-col items-center justify-center gap-3 px-6 py-6 bg-zinc-900 text-zinc-300 text-center"
+  style="position:relative; z-index:2;">
+
+
+
+  <div id="root" style="position:relative; z-index:1;"></div>
+
+  <a href="/" id="app-logo" data-app-name=" S p o t i f e e   v - 2" class="group relative inline-flex items-center">
+    <!-- Logo circular -->
+    <img src="/SpotiFeev2/spotifeev2_icon.svg" alt="Logo" class="h-[100px] w-[100px] object-contain rounded-full
+                 ring-2 ring-black transition-all duration-300
+                 group-hover:ring-offset-4 group-hover:ring-offset-white" />
+
+    <!-- Cajón negro (misma altura que el icono: 100px) -->
+    <div class="absolute left-full top-1/2 -translate-y-1/2 ml-2
+                 origin-left scale-x-0 opacity-0
+                 group-hover:scale-x-100 group-hover:opacity-100
+                 transition-all duration-300" aria-hidden="true">
+      <div
+        class="h-[100px] px-4 rounded-full bg-black text-white ring-2 ring-white shadow whitespace-nowrap font-medium flex items-center leading-none">
+        <span data-typed></span>
+        <span class="ml-2 h-[1em] w-[2px] bg-white/80 animate-pulse"></span>
+      </div>
+    </div>
+  </a>
+
+  <p class="text-sm">&copy; 2025 Mi Sitio Web. Todos los derechos reservados.</p>
+</footer>
+
+
+
+<!-- Scripts -->
+
+<script defer src="https://kit.fontawesome.com/71cfa127b4.js" crossorigin="anonymous"></script>
+
+<!-- Typewriter del cajón (sin frameworks) -->
+<script>
+  (function () {
+    const trigger = document.getElementById('app-logo');
+    if (!trigger) return;
+
+    const typedEl = trigger.querySelector('[data-typed]');
+    const appName = trigger.dataset.appName || 'Mi App';
+    let timer = null;
+
+    function typeIn() {
+      clearInterval(timer);
+      typedEl.textContent = '';
+      let i = 0;
+      timer = setInterval(() => {
+        i++;
+        typedEl.textContent = appName.slice(0, i);
+        if (i >= appName.length) clearInterval(timer);
+      }, 50); // velocidad de tipeo (ms por letra)
+    }
+
+    function clearType() {
+      clearInterval(timer);
+      typedEl.textContent = '';
+    }
+
+    trigger.addEventListener('mouseenter', typeIn);
+    trigger.addEventListener('mouseleave', clearType);
+    trigger.addEventListener('focus', typeIn, true);
+    trigger.addEventListener('blur', clearType, true);
+  })();
+</script>
+
+</html>

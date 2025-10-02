@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(0, 0, 0, 0.87);
+  background-color: #000000;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+
+  footer {
+    text-align: center;
+    padding: 1px;
+    background-color: #000000;
+    color: #ffffff;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+  }
+
+  .music-bg{
+        position:fixed; inset:0; z-index:999; pointer-events:none; overflow:hidden;
+      }
+      .note{
+        position:absolute;
+        font-size: clamp(14px, 2.2vw, 28px);
+        line-height:1;
+        color:#fff;
+        opacity:.22;
+        filter: drop-shadow(0 0 6px rgba(255,255,255,.15));
+        animation:
+          floatX var(--d1, 12s) linear var(--delay, 0s) infinite alternate,
+          floatY var(--d2, 10s) linear var(--delay, 0s) infinite alternate-reverse,
+          spin   24s linear infinite;
+        will-change: transform;
+      }
+      @keyframes floatX { 0% { transform: translateX(0); } 100% { transform: translateX(var(--tx, 50vw)); } }
+      @keyframes floatY { 0% { transform: translateY(0); } 100% { transform: translateY(var(--ty, 40vh)); } }
+      @keyframes spin   { 0% { rotate:0deg; } 100% { rotate:360deg; } }
+
+  /* Nuevo: envoltorio que se mueve con el mouse */
+.note-wrap{
+  position:absolute;
+  transform: translate(var(--mx, 0px), var(--my, 0px));
+  will-change: transform;
+}
+
+/* Tus notas como antes (siguen flotando/rotando con keyframes) */
+.note{
+  position:absolute;
+  font-size: clamp(18px, 3vw, 40px);
+  line-height:1;
+  color:#fff;
+  opacity:.22;
+  filter: drop-shadow(0 0 6px rgba(255,255,255,.15));
+  animation:
+    floatX var(--d1, 12s) linear var(--delay, 0s) infinite alternate,
+    floatY var(--d2, 10s) linear var(--delay, 0s) infinite alternate-reverse,
+    spin   24s linear infinite;
+  will-change: transform;
+}
+
+/* keyframes que ya tenías */
+@keyframes floatX { 0% { transform: translateX(0); } 100% { transform: translateX(var(--tx, 50vw)); } }
+@keyframes floatY { 0% { transform: translateY(0); } 100% { transform: translateY(var(--ty, 40vh)); } }
+@keyframes spin   { 0% { rotate:0deg; } 100% { rotate:360deg; } }
+
+    .music-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;           /* detrás de tu app y footer */
+    pointer-events: none; /* no bloquea clics */
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .music-canvas { display: none; }
+  }
+
+}
