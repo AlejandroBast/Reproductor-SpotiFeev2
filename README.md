@@ -1,4 +1,17 @@
-# Reproductor-SpotiFeev2
+# Reproductor SpotiFeev2
+
+<div align="center" style="display:flex; align-items:center; justify-content:center; gap:16px;">
+
+  <img
+    src="https://github.com/user-attachments/assets/40ab90b5-5198-49fe-9419-155d6694f095"
+    alt="SpotiFeev2 logo"
+    width="250"
+    height="250"
+    style="width:250px; height:250px; object-fit:cover;"
+  />
+</div>
+
+
 
 Aplicación web de reproducción de música (React + Vite + TypeScript) con integración de búsqueda en Audius y un patrón de lista doblemente enlazada para la gestión de la playlist.
 
